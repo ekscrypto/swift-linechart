@@ -68,10 +68,10 @@ open class LineChart: UIView {
         public var axis: Axis = Axis()
         
         // private
-        fileprivate var linear: LinearScale!
-        fileprivate var scale: ((CGFloat) -> CGFloat)!
-        fileprivate var invert: ((CGFloat) -> CGFloat)!
-        fileprivate var ticks: (CGFloat, CGFloat, CGFloat)!
+        fileprivate var linear: LinearScale?
+        fileprivate var scale: ((CGFloat) -> CGFloat)?
+        fileprivate var invert: ((CGFloat) -> CGFloat)?
+        fileprivate var ticks: (CGFloat, CGFloat, CGFloat)?
     }
     
     public struct Animation {
@@ -103,18 +103,20 @@ open class LineChart: UIView {
         didSet {
             let max = getMaximumValue()
             let min = getMinimumValue()
-            y.linear = LinearScale(domain: [min, max], range: [0, drawingHeight])
-            y.scale = y.linear.scale()
-            y.ticks = y.linear.ticks(Int(y.grid.count))
+            let linear = LinearScale(domain: [min, max], range: [0, drawingHeight])
+            y.linear = linear
+            y.scale = linear.scale()
+            y.ticks = linear.ticks(Int(y.grid.count))
         }
     }
     fileprivate var drawingWidth: CGFloat = 0 {
         didSet {
             let data = dataStore[0]
-            x.linear = LinearScale(domain: [0.0, CGFloat(data.count - 1)], range: [0, drawingWidth])
-            x.scale = x.linear.scale()
-            x.invert = x.linear.invert()
-            x.ticks = x.linear.ticks(Int(x.grid.count))
+            let linear = LinearScale(domain: [0.0, CGFloat(data.count - 1)], range: [0, drawingWidth])
+            x.linear = linear
+            x.scale = linear.scale()
+            x.invert = linear.invert()
+            x.ticks = linear.ticks(Int(x.grid.count))
         }
     }
     
@@ -233,38 +235,34 @@ open class LineChart: UIView {
     /**
      * Handle touch events.
      */
-    fileprivate func handleTouchEvents(_ touches: NSSet!, event: UIEvent) {
+    fileprivate func handleTouchEvents(_ touches: Set<UITouch>, event: UIEvent?) {
         if (self.dataStore.isEmpty) {
             return
         }
-        let point: AnyObject! = touches.anyObject() as AnyObject!
+        guard let point = touches.first else { return }
         let xValue = point.location(in: self).x
-        let inverted = self.x.invert(xValue - x.axis.inset)
-        let rounded = Int(round(Double(inverted)))
-        let yValues: [CGFloat] = getYValuesForXValue(rounded)
-        highlightDataPoints(rounded)
-        delegate?.didSelectDataPoint(CGFloat(rounded), yValues: yValues)
+        if let invertFunction = self.x.invert {
+            let inverted = invertFunction(xValue - x.axis.inset)
+            let rounded = Int(round(Double(inverted)))
+            let yValues: [CGFloat] = getYValuesForXValue(rounded)
+            highlightDataPoints(rounded)
+            delegate?.didSelectDataPoint(CGFloat(rounded), yValues: yValues)
+        }
     }
-    
-    
     
     /**
      * Listen on touch end event.
      */
     override open func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        handleTouchEvents(touches as NSSet!, event: event!)
+        handleTouchEvents(touches, event: event)
     }
-    
-    
-    
+
     /**
      * Listen on touch move event
      */
     override open func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        handleTouchEvents(touches as NSSet!, event: event!)
+        handleTouchEvents(touches, event: event)
     }
-    
-    
     
     /**
      * Highlight data points at index.
@@ -296,10 +294,14 @@ open class LineChart: UIView {
     fileprivate func drawDataDots(_ lineIndex: Int) {
         var dotLayers: [DotCALayer] = []
         var data = self.dataStore[lineIndex]
-        
+        guard
+            let scaleYFunction = self.y.scale,
+            let scaleXFunction = self.x.scale
+            else { return }
+
         for index in 0..<data.count {
-            let xValue = self.x.scale(CGFloat(index)) + x.axis.inset - dots.outerRadius/2
-            let yValue = self.bounds.height - self.y.scale(data[index]) - y.axis.inset - dots.outerRadius/2
+            let xValue = scaleXFunction(CGFloat(index)) + x.axis.inset - dots.outerRadius/2
+            let yValue = self.bounds.height - scaleYFunction(data[index]) - y.axis.inset - dots.outerRadius/2
             
             // draw custom layer with another layer in the center
             let dotLayer = DotCALayer()
@@ -330,12 +332,13 @@ open class LineChart: UIView {
      * Draw x and y axis.
      */
     fileprivate func drawAxes() {
+        guard let scaleYFunction = self.y.scale else { return }
         let height = self.bounds.height
         let width = self.bounds.width
         let path = UIBezierPath()
         // draw x-axis
         x.axis.color.setStroke()
-        let y0 = height - self.y.scale(0) - y.axis.inset
+        let y0 = height - scaleYFunction(0) - y.axis.inset
         path.move(to: CGPoint(x: x.axis.inset, y: y0))
         path.addLine(to: CGPoint(x: width - x.axis.inset, y: y0))
         path.stroke()
@@ -384,16 +387,20 @@ open class LineChart: UIView {
      * Draw line.
      */
     fileprivate func drawLine(_ lineIndex: Int) {
-        
+        guard
+            let scaleYFunction = self.y.scale,
+            let scaleXFunction = self.x.scale
+            else { return }
+
         var data = self.dataStore[lineIndex]
         let path = UIBezierPath()
         
-        var xValue = self.x.scale(0) + x.axis.inset
-        var yValue = self.bounds.height - self.y.scale(data[0]) - y.axis.inset
+        var xValue = scaleXFunction(0) + x.axis.inset
+        var yValue = self.bounds.height - scaleYFunction(data[0]) - y.axis.inset
         path.move(to: CGPoint(x: xValue, y: yValue))
         for index in 1..<data.count {
-            xValue = self.x.scale(CGFloat(index)) + x.axis.inset
-            yValue = self.bounds.height - self.y.scale(data[index]) - y.axis.inset
+            xValue = scaleXFunction(CGFloat(index)) + x.axis.inset
+            yValue = self.bounds.height - scaleYFunction(data[index]) - y.axis.inset
             path.addLine(to: CGPoint(x: xValue, y: yValue))
         }
         
@@ -424,25 +431,29 @@ open class LineChart: UIView {
      * Fill area between line chart and x-axis.
      */
     fileprivate func drawAreaBeneathLineChart(_ lineIndex: Int) {
-        
+        guard
+            let scaleYFunction = self.y.scale,
+            let scaleXFunction = self.x.scale
+            else { return }
+
         var data = self.dataStore[lineIndex]
         let path = UIBezierPath()
         
         colors[lineIndex].withAlphaComponent(0.2).setFill()
         // move to origin
-        path.move(to: CGPoint(x: x.axis.inset, y: self.bounds.height - self.y.scale(0) - y.axis.inset))
+        path.move(to: CGPoint(x: x.axis.inset, y: self.bounds.height - scaleYFunction(0) - y.axis.inset))
         // add line to first data point
-        path.addLine(to: CGPoint(x: x.axis.inset, y: self.bounds.height - self.y.scale(data[0]) - y.axis.inset))
+        path.addLine(to: CGPoint(x: x.axis.inset, y: self.bounds.height - scaleYFunction(data[0]) - y.axis.inset))
         // draw whole line chart
         for index in 1..<data.count {
-            let x1 = self.x.scale(CGFloat(index)) + x.axis.inset
-            let y1 = self.bounds.height - self.y.scale(data[index]) - y.axis.inset
+            let x1 = scaleXFunction(CGFloat(index)) + x.axis.inset
+            let y1 = self.bounds.height - scaleYFunction(data[index]) - y.axis.inset
             path.addLine(to: CGPoint(x: x1, y: y1))
         }
         // move down to x axis
-        path.addLine(to: CGPoint(x: self.x.scale(CGFloat(data.count - 1)) + x.axis.inset, y: self.bounds.height - self.y.scale(0) - y.axis.inset))
+        path.addLine(to: CGPoint(x: scaleXFunction(CGFloat(data.count - 1)) + x.axis.inset, y: self.bounds.height - scaleYFunction(0) - y.axis.inset))
         // move to origin
-        path.addLine(to: CGPoint(x: x.axis.inset, y: self.bounds.height - self.y.scale(0) - y.axis.inset))
+        path.addLine(to: CGPoint(x: x.axis.inset, y: self.bounds.height - scaleYFunction(0) - y.axis.inset))
         path.fill()
     }
     
@@ -452,14 +463,18 @@ open class LineChart: UIView {
      * Draw x grid.
      */
     fileprivate func drawXGrid() {
+        guard
+            let xTicks = self.x.ticks,
+            let scaleXFunction = self.x.scale
+            else { return }
         x.grid.color.setStroke()
         let path = UIBezierPath()
         var x1: CGFloat
         let y1: CGFloat = self.bounds.height - y.axis.inset
         let y2: CGFloat = y.axis.inset
-        let (start, stop, step) = self.x.ticks
+        let (start, stop, step) = xTicks
         for i in stride(from: start, through: stop, by: step){
-            x1 = self.x.scale(i) + x.axis.inset
+            x1 = scaleXFunction(i) + x.axis.inset
             path.move(to: CGPoint(x: x1, y: y1))
             path.addLine(to: CGPoint(x: x1, y: y2))
         }
@@ -472,14 +487,18 @@ open class LineChart: UIView {
      * Draw y grid.
      */
     fileprivate func drawYGrid() {
+        guard
+            let yTicks = self.y.ticks,
+            let scaleYFunction = self.y.scale
+            else { return }
         self.y.grid.color.setStroke()
         let path = UIBezierPath()
         let x1: CGFloat = x.axis.inset
         let x2: CGFloat = self.bounds.width - x.axis.inset
         var y1: CGFloat
-        let (start, stop, step) = self.y.ticks
+        let (start, stop, step) = yTicks
         for i in stride(from: start, through: stop, by: step){
-            y1 = self.bounds.height - self.y.scale(i) - y.axis.inset
+            y1 = self.bounds.height - scaleYFunction(i) - y.axis.inset
             path.move(to: CGPoint(x: x1, y: y1))
             path.addLine(to: CGPoint(x: x2, y: y1))
         }
@@ -502,16 +521,20 @@ open class LineChart: UIView {
      * Draw x labels.
      */
     fileprivate func drawXLabels() {
+        guard
+            let xLinear = self.x.linear,
+            let scaleXFunction = self.x.scale
+            else { return }
         let xAxisData = self.dataStore[0]
         let y = self.bounds.height - x.axis.inset
-        let (_, _, step) = x.linear.ticks(xAxisData.count)
-        let width = x.scale(step)
+        let (_, _, step) = xLinear.ticks(xAxisData.count)
+        let width = scaleXFunction(step)
         
         var text: String
         for (index, _) in xAxisData.enumerated() {
-            let xValue = self.x.scale(CGFloat(index)) + x.axis.inset - (width / 2)
+            let xValue = scaleXFunction(CGFloat(index)) + x.axis.inset - (width / 2)
             let label = UILabel(frame: CGRect(x: xValue, y: y, width: width, height: x.axis.inset))
-            label.font = UIFont.preferredFont(forTextStyle: UIFontTextStyle.caption2)
+            label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
             label.textAlignment = .center
             if (x.labels.values.count != 0) {
                 text = x.labels.values[index]
@@ -529,12 +552,16 @@ open class LineChart: UIView {
      * Draw y labels.
      */
     fileprivate func drawYLabels() {
+        guard
+            let yTicks = self.y.ticks,
+            let scaleYFunction = self.y.scale
+            else { return }
         var yValue: CGFloat
-        let (start, stop, step) = self.y.ticks
+        let (start, stop, step) = yTicks
         for i in stride(from: start, through: stop, by: step){
-            yValue = self.bounds.height - self.y.scale(i) - (y.axis.inset * 1.5)
+            yValue = self.bounds.height - scaleYFunction(i) - (y.axis.inset * 1.5)
             let label = UILabel(frame: CGRect(x: 0, y: yValue, width: y.axis.inset, height: y.axis.inset))
-            label.font = UIFont.preferredFont(forTextStyle: UIFontTextStyle.caption2)
+            label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
             label.textAlignment = .center
             label.text = String(Int(round(i)))
             self.addSubview(label)
