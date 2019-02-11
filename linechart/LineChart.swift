@@ -112,7 +112,8 @@ open class LineChart: UIView {
     fileprivate var drawingWidth: CGFloat = 0 {
         didSet {
             let data = dataStore[0]
-            let linear = LinearScale(domain: [0.0, CGFloat(data.count - 1)], range: [0, drawingWidth])
+            let xAxisCap = data.count > 1 ? CGFloat(data.count - 1) : 1.0
+            let linear = LinearScale(domain: [0.0, xAxisCap], range: [0, drawingWidth])
             x.linear = linear
             x.scale = linear.scale()
             x.invert = linear.invert()
@@ -357,10 +358,7 @@ open class LineChart: UIView {
     fileprivate func getMaximumValue() -> CGFloat {
         var max: CGFloat = 1
         for data in dataStore {
-            let newMax = data.max()!
-            if newMax > max {
-                max = newMax
-            }
+            max = CGFloat.maximum(max, data.max() ?? 1.0)
         }
         return max
     }
@@ -373,10 +371,7 @@ open class LineChart: UIView {
     fileprivate func getMinimumValue() -> CGFloat {
         var min: CGFloat = 0
         for data in dataStore {
-            let newMin = data.min()!
-            if newMin < min {
-                min = newMin
-            }
+            min = CGFloat.minimum(min, data.min() ?? 0.0)
         }
         return min
     }
@@ -389,7 +384,9 @@ open class LineChart: UIView {
     fileprivate func drawLine(_ lineIndex: Int) {
         guard
             let scaleYFunction = self.y.scale,
-            let scaleXFunction = self.x.scale
+            let scaleXFunction = self.x.scale,
+            self.dataStore.count > lineIndex,
+            self.dataStore[lineIndex].count > 0
             else { return }
 
         var data = self.dataStore[lineIndex]
@@ -442,10 +439,8 @@ open class LineChart: UIView {
         colors[lineIndex].withAlphaComponent(0.2).setFill()
         // move to origin
         path.move(to: CGPoint(x: x.axis.inset, y: self.bounds.height - scaleYFunction(0) - y.axis.inset))
-        // add line to first data point
-        path.addLine(to: CGPoint(x: x.axis.inset, y: self.bounds.height - scaleYFunction(data[0]) - y.axis.inset))
         // draw whole line chart
-        for index in 1..<data.count {
+        for index in 0..<data.count {
             let x1 = scaleXFunction(CGFloat(index)) + x.axis.inset
             let y1 = self.bounds.height - scaleYFunction(data[index]) - y.axis.inset
             path.addLine(to: CGPoint(x: x1, y: y1))
