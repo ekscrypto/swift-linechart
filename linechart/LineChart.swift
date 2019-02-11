@@ -188,7 +188,8 @@ open class LineChart: UIView {
         dotsDataStore.removeAll()
         
         // draw grid
-        if x.grid.visible && y.grid.visible { drawGrid() }
+        if x.grid.visible { drawXGrid() }
+        if y.grid.visible { drawYGrid() }
         
         // draw axes
         if x.axis.visible && y.axis.visible { drawAxes() }
@@ -475,9 +476,7 @@ open class LineChart: UIView {
         }
         path.stroke()
     }
-    
-    
-    
+
     /**
      * Draw y grid.
      */
@@ -499,19 +498,7 @@ open class LineChart: UIView {
         }
         path.stroke()
     }
-    
-    
-    
-    /**
-     * Draw grid.
-     */
-    fileprivate func drawGrid() {
-        drawXGrid()
-        drawYGrid()
-    }
-    
-    
-    
+
     /**
      * Draw x labels.
      */
