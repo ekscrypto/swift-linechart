@@ -356,7 +356,7 @@ open class LineChart: UIView {
      * Get maximum value in all arrays in data store.
      */
     fileprivate func getMaximumValue() -> CGFloat {
-        var max: CGFloat = 1
+        var max: CGFloat = dataStore.first?.first ?? 1
         for data in dataStore {
             max = CGFloat.maximum(max, data.max() ?? 1.0)
         }
@@ -369,7 +369,7 @@ open class LineChart: UIView {
      * Get maximum value in all arrays in data store.
      */
     fileprivate func getMinimumValue() -> CGFloat {
-        var min: CGFloat = 0
+        var min: CGFloat = dataStore.first?.first ?? 0
         for data in dataStore {
             min = CGFloat.minimum(min, data.min() ?? 0.0)
         }
