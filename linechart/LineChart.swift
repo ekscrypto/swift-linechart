@@ -508,14 +508,14 @@ open class LineChart: UIView {
             let scaleXFunction = self.x.scale
             else { return }
         let xAxisData = self.dataStore[0]
-        let y = self.bounds.height - x.axis.inset
+        let y = self.bounds.height - self.y.axis.inset
         let (_, _, step) = xLinear.ticks(xAxisData.count)
         let width = scaleXFunction(step)
         
         var text: String
         for (index, _) in xAxisData.enumerated() {
             let xValue = scaleXFunction(CGFloat(index)) + x.axis.inset - (width / 2)
-            let label = UILabel(frame: CGRect(x: xValue, y: y, width: width, height: x.axis.inset))
+            let label = UILabel(frame: CGRect(x: xValue, y: y, width: width, height: self.y.axis.inset))
             label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
             label.textAlignment = .center
             if (x.labels.values.count != 0) {
@@ -536,16 +536,23 @@ open class LineChart: UIView {
     fileprivate func drawYLabels() {
         guard
             let yTicks = self.y.ticks,
-            let scaleYFunction = self.y.scale
+            let scaleYFunction = self.y.scale,
+            var precision = self.y.linear?.precision(Int(self.y.grid.count))
             else { return }
+        var decimals = 0
+        while precision < 1.0 {
+            decimals += 1
+            precision *= 10
+        }
+        let format = "%.\(decimals)f"
         var yValue: CGFloat
         let (start, stop, step) = yTicks
         for i in stride(from: start, through: stop, by: step){
             yValue = self.bounds.height - scaleYFunction(i) - (y.axis.inset * 1.5)
-            let label = UILabel(frame: CGRect(x: 0, y: yValue, width: y.axis.inset, height: y.axis.inset))
+            let label = UILabel(frame: CGRect(x: 0, y: yValue, width: x.axis.inset, height: y.axis.inset))
             label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
             label.textAlignment = .center
-            label.text = String(Int(round(i)))
+            label.text = String(format: format, i)
             self.addSubview(label)
         }
     }
@@ -629,7 +636,7 @@ open class LinearScale {
     var range: [CGFloat]
     
     public init(domain: [CGFloat] = [0, 1], range: [CGFloat] = [0, 1]) {
-        self.domain = domain
+        self.domain = LinearScale.scaleExtent(domain)
         self.range = range
     }
     
@@ -645,36 +652,44 @@ open class LinearScale {
         return scale_linearTicks(domain, m: m)
     }
     
-    fileprivate func scale_linearTicks(_ domain: [CGFloat], m: Int) -> (CGFloat, CGFloat, CGFloat) {
-        return scale_linearTickRange(domain, m: m)
+    open func precision(_ m: Int) -> CGFloat {
+        let span = domain[1] - domain[0]
+        let divisions = m > 0 ? m : 1
+        let precision = CGFloat(pow(10, floor(log(Double(span) / Double(divisions)) / M_LN10)))
+        return precision
     }
     
-    fileprivate func scale_linearTickRange(_ domain: [CGFloat], m: Int) -> (CGFloat, CGFloat, CGFloat) {
-        var extent = scaleExtent(domain)
-        let span = extent[1] - extent[0]
-        var step = CGFloat(pow(10, floor(log(Double(span) / Double(m)) / M_LN10)))
-        let err = CGFloat(m) / span * step
+    fileprivate func scale_linearTicks(_ domain: [CGFloat], m: Int) -> (CGFloat, CGFloat, CGFloat) {
+        let span = domain[1] - domain[0]
+        let divisions = m > 0 ? m : 1
+        let precision = CGFloat(pow(10, floor(log(Double(span) / Double(divisions)) / M_LN10)))
         
-        // Filter ticks to get closer to the desired count.
-        if (err <= 0.15) {
-            step *= 10
-        } else if (err <= 0.35) {
-            step *= 5
-        } else if (err <= 0.75) {
-            step *= 2
-        }
+        print("\(#function) domain: \(domain) m: \(m) precision: \(precision)")
         
         // Round start and stop values to step interval.
-        let start = ceil(extent[0] / step) * step
-        let stop = floor(extent[1] / step) * step + step * 0.5 // inclusive
-        
+        let start = floor(domain[0] / precision) * precision
+        let stop = ceil(domain[1] / precision) * precision
+        let step = floor((stop - start) / CGFloat(divisions) / precision) * precision
+
+        print("\(#function) start: \(start) stop: \(stop) step: \(step)")
+
         return (start, stop, step)
     }
     
-    fileprivate func scaleExtent(_ domain: [CGFloat]) -> [CGFloat] {
-        let start = domain[0]
-        let stop = domain[domain.count - 1]
-        return start < stop ? [start, stop] : [stop, start]
+    fileprivate static func scaleExtent(_ domain: [CGFloat]) -> [CGFloat] {
+        if let minimum = domain.min(), let maximum = domain.max() {
+            if minimum < maximum {
+                return [minimum, maximum]
+            } else {
+                if minimum > 0 {
+                    return [0, minimum]
+                }
+                if minimum < 0 {
+                    return [minimum, 0]
+                }
+            }
+        }
+        return [0, 1]
     }
     
     fileprivate func interpolate(_ a: CGFloat, b: CGFloat) -> (_ c: CGFloat) -> CGFloat {
