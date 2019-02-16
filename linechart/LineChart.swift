@@ -165,8 +165,8 @@ open class LineChart: UIView {
             return
         }
         
-        self.drawingHeight = self.bounds.height - (2 * y.axis.inset)
-        self.drawingWidth = self.bounds.width - (2 * x.axis.inset)
+        self.drawingHeight = self.bounds.height - y.axis.inset
+        self.drawingWidth = self.bounds.width - x.axis.inset
         
         // remove all labels
         for view: AnyObject in self.subviews {
@@ -342,12 +342,12 @@ open class LineChart: UIView {
         x.axis.color.setStroke()
         let y0 = height - scaleYFunction(0) - y.axis.inset
         path.move(to: CGPoint(x: x.axis.inset, y: y0))
-        path.addLine(to: CGPoint(x: width - x.axis.inset, y: y0))
+        path.addLine(to: CGPoint(x: width, y: y0))
         path.stroke()
         // draw y-axis
         y.axis.color.setStroke()
         path.move(to: CGPoint(x: x.axis.inset, y: height - y.axis.inset))
-        path.addLine(to: CGPoint(x: x.axis.inset, y: y.axis.inset))
+        path.addLine(to: CGPoint(x: x.axis.inset, y: 0))
         path.stroke()
     }
     
@@ -467,8 +467,9 @@ open class LineChart: UIView {
         let path = UIBezierPath()
         var x1: CGFloat
         let y1: CGFloat = self.bounds.height - y.axis.inset
-        let y2: CGFloat = y.axis.inset
+        let y2: CGFloat = 0
         let (start, stop, step) = xTicks
+//        print("Will be drawing grid from \(start) to \(stop) by \(step), bounds: \(self.bounds)")
         for i in stride(from: start, through: stop, by: step){
             x1 = scaleXFunction(i) + x.axis.inset
             path.move(to: CGPoint(x: x1, y: y1))
@@ -488,7 +489,7 @@ open class LineChart: UIView {
         self.y.grid.color.setStroke()
         let path = UIBezierPath()
         let x1: CGFloat = x.axis.inset
-        let x2: CGFloat = self.bounds.width - x.axis.inset
+        let x2: CGFloat = self.bounds.width
         var y1: CGFloat
         let (start, stop, step) = yTicks
         for i in stride(from: start, through: stop, by: step){
@@ -511,12 +512,16 @@ open class LineChart: UIView {
         let y = self.bounds.height - self.y.axis.inset
         let (_, _, step) = xLinear.ticks(xAxisData.count)
         let width = scaleXFunction(step)
-        
+        let font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
+        let labelHeight = font.pointSize * 1.5
+        if self.y.axis.inset < labelHeight {
+            print("Warning: X-axis labels may be cut-off and/or bleed outside rendering view")
+        }
         var text: String
         for (index, _) in xAxisData.enumerated() {
             let xValue = scaleXFunction(CGFloat(index)) + x.axis.inset - (width / 2)
-            let label = UILabel(frame: CGRect(x: xValue, y: y, width: width, height: self.y.axis.inset))
-            label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
+            let label = UILabel(frame: CGRect(x: xValue, y: y, width: width, height: labelHeight))
+            label.font = font
             label.textAlignment = .center
             if (x.labels.values.count != 0) {
                 text = x.labels.values[index]
@@ -546,11 +551,15 @@ open class LineChart: UIView {
         }
         let format = "%.\(decimals)f"
         var yValue: CGFloat
+        let font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
+        let labelHeight = font.pointSize * 1.5
+        let offset = y.axis.inset + labelHeight * 0.5
         let (start, stop, step) = yTicks
         for i in stride(from: start, through: stop, by: step){
-            yValue = self.bounds.height - scaleYFunction(i) - (y.axis.inset * 1.5)
-            let label = UILabel(frame: CGRect(x: 0, y: yValue, width: x.axis.inset, height: y.axis.inset))
-            label.font = UIFont.preferredFont(forTextStyle: UIFont.TextStyle.caption2)
+            yValue = self.bounds.height - scaleYFunction(i) - offset
+            guard yValue > 0 else { return }
+            let label = UILabel(frame: CGRect(x: 0, y: yValue, width: x.axis.inset, height: labelHeight))
+            label.font = font
             label.textAlignment = .center
             label.text = String(format: format, i)
             self.addSubview(label)
@@ -664,14 +673,14 @@ open class LinearScale {
         let divisions = m > 0 ? m : 1
         let precision = CGFloat(pow(10, floor(log(Double(span) / Double(divisions)) / M_LN10)))
         
-        print("\(#function) domain: \(domain) m: \(m) precision: \(precision)")
+//        print("\(#function) domain: \(domain) m: \(m) precision: \(precision)")
         
         // Round start and stop values to step interval.
         let start = floor(domain[0] / precision) * precision
         let stop = ceil(domain[1] / precision) * precision
         let step = floor((stop - start) / CGFloat(divisions) / precision) * precision
 
-        print("\(#function) start: \(start) stop: \(stop) step: \(step)")
+//        print("\(#function) start: \(start) stop: \(stop) step: \(step)")
 
         return (start, stop, step)
     }
